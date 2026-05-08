@@ -1474,7 +1474,7 @@ export async function processJsonDataAsync(
       forecast_years: allYears.filter(y => y > historicalEndYear),
       currency: 'USD',
       value_unit: 'Million',
-      volume_unit: 'Units',
+      volume_unit: 'Th. units',
       has_value: valueRecords.length > 0,
       has_volume: volumeRecords.length > 0,
     }
