@@ -137,7 +137,7 @@ export function GlobalKPICards() {
     // No conversion is needed - just display the values with the appropriate unit label
     const unit = filters.dataType === 'value'
       ? (data.metadata.value_unit || 'Million')
-      volume_unit: 'Th. units',
+      : (data.metadata.volume_unit || 'Th. units')
 
     // Display values as-is (they're already in the correct unit)
     const marketSizeStartDisplay = marketSizeStart
