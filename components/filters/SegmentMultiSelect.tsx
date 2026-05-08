@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useDashboardStore } from '@/lib/store'
+import { getSelectableSegmentTypes } from '@/lib/chart-config'
 import { Check, ChevronDown } from 'lucide-react'
 
 export function SegmentMultiSelect() {
@@ -169,7 +170,7 @@ export function SegmentMultiSelect() {
     }
     
     return structuredSegments
-  }, [data, filters.segmentType, filters.businessType])
+  }, [data, filters.segmentType, filters.businessType, filters.dataType])
 
   const handleToggle = (segment: string) => {
     const current = filters.segments
@@ -198,9 +199,8 @@ export function SegmentMultiSelect() {
   if (!data) return null
 
   const selectedCount = filters.segments.length
-  // Get all available segment types
   const allSegmentTypes = Object.keys(data.dimensions.segments)
-  const segmentTypes = allSegmentTypes
+  const segmentTypes = getSelectableSegmentTypes(filters.dataType, allSegmentTypes)
 
   return (
     <div className="space-y-4" ref={dropdownRef}>

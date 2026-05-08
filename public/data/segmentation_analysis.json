@@ -17,22 +17,22 @@
         "Maintenance & Support": {}
       }
     },
-    "By Display Technology": {
+    "Display Technology": {
       "LCD": {},
       "Direct View LED": {},
       "OLED": {},
       "E-paper": {}
     },
-    "By Screen Size": {
-      "Up to 32\"": {},
-      "32\"-52\"": {},
-      "Above 52\"": {}
+    "Screen Size": {
+      "Up to 32”": {},
+      "32”–52”": {},
+      "Above 52”": {}
     },
-    "By Installation": {
+    "Installation Type": {
       "Indoor": {},
       "Outdoor": {}
     },
-    "By Industry Vertical": {
+    "Industry Vertical": {
       "Retail": {},
       "Corporate": {},
       "Education": {},
@@ -41,7 +41,7 @@
       "Hospitality & QSR": {},
       "Others (Banking & BFSI, Entertainment & Sports, etc.)": {}
     },
-    "By Sales Channel": {
+    "Sales Channel": {
       "Direct Sales": {},
       "Distributors / Resellers": {}
     }

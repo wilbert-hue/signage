@@ -2,6 +2,20 @@ import { create } from 'zustand'
 import type { FilterState, ComparisonData } from './types'
 import type { ChartGroupId } from './chart-groups'
 import { DEFAULT_CHART_GROUP } from './chart-groups'
+import { resolveSegmentTypeForDataType } from './chart-config'
+
+function coerceVolumeSegmentFilters(filters: FilterState, data: ComparisonData | null): FilterState {
+  if (!data || filters.dataType !== 'volume') return filters
+  const allTypes = Object.keys(data.dimensions.segments)
+  const next = resolveSegmentTypeForDataType('volume', filters.segmentType, allTypes)
+  if (next === filters.segmentType) return filters
+  return {
+    ...filters,
+    segmentType: next,
+    segments: [],
+    advancedSegments: [],
+  }
+}
 
 interface DashboardStore {
   data: ComparisonData | null
@@ -251,30 +265,21 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   updateFilters: (newFilters) => {
     console.log('🔧 Store: updateFilters called with:', newFilters)
     set((state) => {
-      // When switching to Volume, find a valid segment type that has volume data
+      // Volume tab: only "By Component" is selectable (authoritative hardware units in source data)
       if (newFilters.dataType === 'volume' && state.filters.dataType !== 'volume') {
-        const volumeRecords = state.data?.data.volume.geography_segment_matrix || []
-        const volumeSegmentTypes = new Set(volumeRecords.map(r => r.segment_type))
         const allSegmentTypes = state.data ? Object.keys(state.data.dimensions.segments) : []
-
-        // Use current segment type if it has volume data, otherwise find the first one that does
-        let targetSegmentType = state.filters.segmentType
-        if (!volumeSegmentTypes.has(targetSegmentType)) {
-          if (volumeSegmentTypes.size > 0) {
-            // Use the first segment type that has volume records
-            targetSegmentType = Array.from(volumeSegmentTypes)[0]
-          } else if (allSegmentTypes.length > 0) {
-            // Fallback: use the first segment type from dimensions
-            targetSegmentType = allSegmentTypes[0]
-          }
-        }
+        const targetSegmentType = resolveSegmentTypeForDataType(
+          'volume',
+          state.filters.segmentType,
+          allSegmentTypes
+        )
 
         console.log('🔧 Store: Switching to Volume - using segmentType:', targetSegmentType)
         newFilters = {
           ...newFilters,
           segmentType: targetSegmentType,
-          segments: [], // Clear segments when switching data type
-          advancedSegments: [], // Clear advanced segments to keep UI in sync
+          segments: [],
+          advancedSegments: [],
         } as any
       }
 
@@ -331,7 +336,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
         })
         
         return {
-          filters: updatedFilters,
+          filters: coerceVolumeSegmentFilters(updatedFilters, state.data),
           geographyFiltersBySegmentType: { ...state.geographyFiltersBySegmentType }
         }
       }
@@ -366,7 +371,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
         advancedSegments: (updatedFilters as any).advancedSegments
       })
       return {
-        filters: updatedFilters,
+        filters: coerceVolumeSegmentFilters(updatedFilters, state.data),
         geographyFiltersBySegmentType: { ...state.geographyFiltersBySegmentType }
       }
     })
@@ -454,7 +459,7 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
   
   updateOpportunityFilters: (newFilters) => {
     set((state) => {
-      const updatedFilters: FilterState = {
+      let merged: FilterState & { advancedSegments?: FilterState['advancedSegments'] } = {
         ...state.opportunityFilters,
         ...(newFilters.geographies !== undefined && { geographies: newFilters.geographies || [] }),
         ...(newFilters.segments !== undefined && { segments: newFilters.segments || [] }),
@@ -465,7 +470,18 @@ export const useDashboardStore = create<DashboardStore>((set, get) => ({
         ...(newFilters.businessType !== undefined && { businessType: newFilters.businessType }),
         ...(newFilters.aggregationLevel !== undefined && { aggregationLevel: newFilters.aggregationLevel }),
       }
-      return { opportunityFilters: updatedFilters }
+
+      if (newFilters.dataType === 'volume' && state.opportunityFilters.dataType !== 'volume') {
+        const allTypes = state.data ? Object.keys(state.data.dimensions.segments) : []
+        merged = {
+          ...merged,
+          segmentType: resolveSegmentTypeForDataType('volume', merged.segmentType, allTypes),
+          segments: [],
+          advancedSegments: [],
+        }
+      }
+
+      return { opportunityFilters: coerceVolumeSegmentFilters(merged, state.data) }
     })
   },
   

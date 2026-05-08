@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { useDashboardStore } from '@/lib/store'
 import { TrendingUp, DollarSign, Calendar, Activity } from 'lucide-react'
 import { formatIndianNumber, formatIndianNumberWithCommas, formatCurrencyValue } from '@/lib/utils'
+import { resolveSegmentTypeForDataType } from '@/lib/chart-config'
 
 export function GlobalKPICards() {
   const { data, filters, currency } = useDashboardStore()
@@ -19,11 +20,13 @@ export function GlobalKPICards() {
       ? filters.geographies // Use all selected geographies
       : [] // Empty array means we'll show data for all geographies
     
-    // Get segment type from filters (or use first segment type)
-    const segmentTypes = Object.keys(data.dimensions.segments)
-    const targetSegmentType = filters.segmentType || segmentTypes[0] || null
-    
-    // If no segment type is set, can't calculate KPIs
+    const allSegmentTypes = Object.keys(data.dimensions.segments)
+    const targetSegmentType = resolveSegmentTypeForDataType(
+      filters.dataType,
+      filters.segmentType || '',
+      allSegmentTypes
+    )
+
     if (!targetSegmentType) {
       return null
     }
@@ -273,12 +276,6 @@ export function GlobalKPICards() {
               </p>
             </div>
           </div>
-        </div>
-
-        {/* Disclaimer Note */}
-        <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-300 rounded text-xs text-amber-800 flex items-center gap-2">
-          <span className="font-bold">NOTE:</span>
-          <span>All the data in the dashboard is dummy data. No real-world data is related to this.</span>
         </div>
       </div>
     </div>

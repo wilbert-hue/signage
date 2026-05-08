@@ -65,3 +65,69 @@ export function getHeatmapColor(value: number, min: number, max: number): string
   }
 }
 
+/** Volume data in this product is authoritative under the component hierarchy only. */
+export const VOLUME_ONLY_SEGMENT_TYPE = 'By Component' as const
+
+export function getSelectableSegmentTypes(
+  dataType: 'value' | 'volume',
+  allSegmentTypes: string[]
+): string[] {
+  if (dataType !== 'volume') return allSegmentTypes
+  if (allSegmentTypes.includes(VOLUME_ONLY_SEGMENT_TYPE)) {
+    return [VOLUME_ONLY_SEGMENT_TYPE]
+  }
+  return allSegmentTypes
+}
+
+/** Pick a valid segment type for the current data mode (coerces volume → By Component when available). */
+export function resolveSegmentTypeForDataType(
+  dataType: 'value' | 'volume',
+  currentSegmentType: string,
+  allSegmentTypes: string[]
+): string {
+  const selectable = getSelectableSegmentTypes(dataType, allSegmentTypes)
+  if (currentSegmentType && selectable.includes(currentSegmentType)) {
+    return currentSegmentType
+  }
+  return selectable[0] || currentSegmentType
+}
+
+/** Volume `By Component` subtree: only Hardware (per source workbook). */
+export const VOLUME_BY_COMPONENT_HARDWARE_ROOT = 'Hardware' as const
+
+/**
+ * Narrow By Component hierarchy and item list to Hardware and its descendants
+ * when building volume UX (matches trimmed volume.json).
+ */
+export function constrainVolumeByComponentHierarchy(
+  hierarchy: Record<string, string[]>,
+  items: string[]
+): { hierarchy: Record<string, string[]>; items: string[] } {
+  const ROOT = VOLUME_BY_COMPONENT_HARDWARE_ROOT
+  const childrenOf = (key: string) => hierarchy[key] ?? []
+
+  if (!childrenOf(ROOT).length && !Object.keys(hierarchy).includes(ROOT)) {
+    return { hierarchy: { ...hierarchy }, items: [...items] }
+  }
+
+  const inSubtree = new Set<string>()
+  const walk = (node: string) => {
+    inSubtree.add(node)
+    for (const c of childrenOf(node)) walk(c)
+  }
+  walk(ROOT)
+
+  const filteredHierarchy: Record<string, string[]> = {}
+  for (const key of Object.keys(hierarchy)) {
+    if (!inSubtree.has(key)) continue
+    filteredHierarchy[key] = childrenOf(key).filter(c => inSubtree.has(c))
+  }
+
+  let filteredItems = items.filter(i => inSubtree.has(i))
+  if (filteredItems.length === 0 && inSubtree.size > 0) {
+    filteredItems = Array.from(inSubtree).sort((a, b) => a.localeCompare(b))
+  }
+
+  return { hierarchy: filteredHierarchy, items: filteredItems }
+}
+

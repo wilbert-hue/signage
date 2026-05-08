@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useDashboardStore } from '@/lib/store'
+import { getSelectableSegmentTypes } from '@/lib/chart-config'
 import { BusinessTypeFilter } from './BusinessTypeFilter'
 import { X, Plus } from 'lucide-react'
 
@@ -104,9 +105,8 @@ export function CompactFilterPanel() {
     availableSegments = segmentDimension?.items || []
   }
   
-  // Get all available segment types
   const allSegmentTypes = Object.keys(data.dimensions.segments)
-  const segmentTypes = allSegmentTypes
+  const segmentTypes = getSelectableSegmentTypes(filters.dataType, allSegmentTypes)
   
   // Build hierarchical options for the select
   const getHierarchicalOptions = () => {

@@ -1,4 +1,154 @@
-import type { DataRecord, FilterState, ChartDataPoint, HeatmapCell, ComparisonTableRow } from './types'
+import type {
+  DataRecord,
+  FilterState,
+  ChartDataPoint,
+  HeatmapCell,
+  ComparisonTableRow,
+  SegmentDimension,
+  SegmentHierarchy,
+} from './types'
+
+/**
+ * Hierarchy roots (immediate children of segment type) — not themselves children of another key.
+ */
+export function hierarchyRootKeys(hierarchy: Record<string, string[]>): Set<string> {
+  const keys = Object.keys(hierarchy || {})
+  if (keys.length === 0) return new Set()
+  const appearsAsChild = new Set<string>()
+  for (const children of Object.values(hierarchy || {})) {
+    for (const c of children) appearsAsChild.add(c)
+  }
+  return new Set(keys.filter(k => !appearsAsChild.has(k)))
+}
+
+/** Normalized path segments from hierarchy columns (deepest ancestry). */
+function segmentPath(record: Pick<DataRecord, 'segment_hierarchy'>): string[] {
+  return [
+    record.segment_hierarchy.level_1,
+    record.segment_hierarchy.level_2,
+    record.segment_hierarchy.level_3,
+    record.segment_hierarchy.level_4,
+    record.segment_hierarchy.level_5,
+  ]
+    .map(s => String(s ?? '').trim())
+    .filter(Boolean)
+}
+
+/** Stable lookup key aligned with ComparisonTable filtered rows */
+export function comparisonTableShareRowKey(record: DataRecord): string {
+  return `${record.geography}|${record.segment_type}|${record.segment}|${segmentPath(record).join('/')}`
+}
+
+function meanTimeSeriesYears(ts: Record<number, number>, y0: number, y1: number): number {
+  let sum = 0
+  let n = 0
+  const lo = Math.min(y0, y1)
+  const hi = Math.max(y0, y1)
+  for (let y = lo; y <= hi; y++) {
+    const v = ts[y]
+    if (typeof v === 'number' && Number.isFinite(v)) {
+      sum += v
+      n++
+    }
+  }
+  return n > 0 ? sum / n : 0
+}
+
+type BucketKind = 'ROOT' | 'UNDER' | 'ALL_ROWS'
+
+interface ShareBucket {
+  kind: BucketKind
+  geography: string
+  segmentType: string
+  parentSegment?: string
+}
+
+function classifyShareBucket(record: DataRecord, hierarchy: Record<string, string[]>): ShareBucket {
+  const geo = record.geography
+  const st = record.segment_type
+  const roots = hierarchyRootKeys(hierarchy)
+  const path = segmentPath(record)
+
+  if (!Object.keys(hierarchy || {}).length || roots.size === 0) {
+    return { kind: 'ALL_ROWS', geography: geo, segmentType: st }
+  }
+
+  if (path.length >= 2) {
+    return {
+      kind: 'UNDER',
+      geography: geo,
+      segmentType: st,
+      parentSegment: path[path.length - 2],
+    }
+  }
+
+  if (path.length === 1) {
+    const top = path[0]
+    if (roots.has(top) && record.segment === top) {
+      return { kind: 'ROOT', geography: geo, segmentType: st }
+    }
+  }
+
+  return { kind: 'ALL_ROWS', geography: geo, segmentType: st }
+}
+
+function shareBucketKey(b: ShareBucket): string {
+  if (b.kind === 'ROOT') return `${b.geography}||${b.segmentType}||ROOT`
+  if (b.kind === 'UNDER') return `${b.geography}||${b.segmentType}||UNDER||${b.parentSegment}`
+  return `${b.geography}||${b.segmentType}||ALL_ROWS`
+}
+
+/**
+ * Mean-over-selected-years share percent per row — denominator is summed peer means within the SAME geography only.
+ * Peers share the hierarchy bucket (top-level ROOT siblings vs UNDER same parent segment).
+ *
+ * Formula per row:
+ * mean_segment = AVG(time_series[y] for y in [yearStart, yearEnd])
+ * share_pct = mean_segment / sum(peer mean_segment *for that geography × segment type × bucket*) * 100
+ */
+export function comparisonTableSharesByRecordKey(
+  records: DataRecord[],
+  segmentDimensions: Record<string, SegmentDimension>,
+  yearStart: number,
+  yearEnd: number,
+): Record<string, number> {
+  if (!records.length) return {}
+
+  const rows = records.map(record => ({
+    record,
+    mean: meanTimeSeriesYears(record.time_series, yearStart, yearEnd),
+    stableKey: comparisonTableShareRowKey(record),
+    bucketKey: shareBucketKey(
+      classifyShareBucket(record, segmentDimensions[record.segment_type]?.hierarchy ?? {}),
+    ),
+  }))
+
+  const bucketTotals = new Map<string, number>()
+  for (const row of rows) {
+    bucketTotals.set(row.bucketKey, (bucketTotals.get(row.bucketKey) ?? 0) + row.mean)
+  }
+
+  const out: Record<string, number> = {}
+  for (const row of rows) {
+    const denom = bucketTotals.get(row.bucketKey) ?? 0
+    out[row.stableKey] = denom > 0 ? (row.mean / denom) * 100 : 0
+  }
+
+  return out
+}
+
+/** Write market_share onto records (e.g. base year only: yearStart === yearEnd). */
+export function assignRecordMarketSharesForYearRange(
+  records: DataRecord[],
+  segmentDimensions: Record<string, SegmentDimension>,
+  yearStart: number,
+  yearEnd: number,
+): void {
+  const map = comparisonTableSharesByRecordKey(records, segmentDimensions, yearStart, yearEnd)
+  for (const record of records) {
+    record.market_share = map[comparisonTableShareRowKey(record)] ?? 0
+  }
+}
 
 /**
  * Calculate proportional distribution shares for geographies based on "By Region" data.

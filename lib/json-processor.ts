@@ -4,6 +4,7 @@
  */
 
 import type { ComparisonData, DataRecord, Metadata, GeographyDimension, SegmentDimension, SegmentHierarchy } from './types'
+import { assignRecordMarketSharesForYearRange } from './data-processor'
 import fs from 'fs/promises'
 import path from 'path'
 
@@ -1455,19 +1456,9 @@ export async function processJsonDataAsync(
       }
     }
     
-    // Calculate market share for each record
-    const calculateMarketShare = (records: DataRecord[], year: number) => {
-      const yearTotal = records.reduce((sum, r) => sum + (r.time_series[year] || 0), 0)
-      records.forEach(record => {
-        const value = record.time_series[year] || 0
-        record.market_share = yearTotal > 0 ? (value / yearTotal) * 100 : 0
-      })
-    }
-    
-    // Calculate market share for base year
-    calculateMarketShare(valueRecords, baseYear)
+    assignRecordMarketSharesForYearRange(valueRecords, segments, baseYear, baseYear)
     if (volumeRecords.length > 0) {
-      calculateMarketShare(volumeRecords, baseYear)
+      assignRecordMarketSharesForYearRange(volumeRecords, segments, baseYear, baseYear)
     }
     
     // Build metadata

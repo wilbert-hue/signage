@@ -4,6 +4,7 @@ import { useEffect, useRef, useMemo, useState } from 'react'
 import * as d3 from 'd3'
 import { useDashboardStore } from '@/lib/store'
 import { getChartColor } from '@/lib/chart-theme'
+import { getSelectableSegmentTypes } from '@/lib/chart-config'
 import { filterData } from '@/lib/data-processor'
 import { GeographyMultiSelect } from '@/components/filters/GeographyMultiSelect'
 import { AggregationLevelSelector } from '@/components/filters/AggregationLevelSelector'
@@ -1569,13 +1570,15 @@ export function D3BubbleChartIndependent({ title, height = 500 }: BubbleChartPro
               }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-black"
             >
-              {data?.dimensions?.segments ? Object.keys(data.dimensions.segments)
-                // Show all segment types for both value and volume data
-                .map(option => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              )) : null}
+              {data?.dimensions?.segments
+                ? getSelectableSegmentTypes(activeFilters.dataType, Object.keys(data.dimensions.segments)).map(
+                    option => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    )
+                  )
+                : null}
             </select>
           </div>
         </div>

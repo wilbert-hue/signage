@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useDashboardStore } from '@/lib/store'
-import { filterData } from '@/lib/data-processor'
+import { filterData, comparisonTableSharesByRecordKey, comparisonTableShareRowKey } from '@/lib/data-processor'
 import { ArrowUp, ArrowDown, Download } from 'lucide-react'
 
 interface ComparisonTableProps {
@@ -43,24 +43,37 @@ export function ComparisonTable({ title, height = 600 }: ComparisonTableProps) {
       return 0
     }
 
+    const shareByKey = comparisonTableSharesByRecordKey(
+      filtered,
+      data.dimensions.segments,
+      startYear,
+      endYear,
+    )
+
     // Transform to table format
-    return filtered.map(record => ({
-      geography: record.geography,
-      segment: record.segment,
-      segmentType: record.segment_type,
-      currentValue: record.time_series[year] || 0,
-      startValue: record.time_series[startYear] || 0,
-      endValue: record.time_series[endYear] || 0,
-      growth: record.time_series[startYear] > 0 
-        ? (((record.time_series[endYear] || 0) - (record.time_series[startYear] || 0)) / record.time_series[startYear] * 100)
-        : 0,
-      cagr: parseCAGR(record.cagr),
-      marketShare: record.market_share || 0,
-      sparkline: Object.entries(record.time_series)
-        .filter(([y]) => parseInt(y) >= startYear && parseInt(y) <= endYear)
-        .sort(([a], [b]) => parseInt(a) - parseInt(b))
-        .map(([, value]) => value)
-    }))
+    return filtered.map(record => {
+      const sk = comparisonTableShareRowKey(record)
+      return {
+        geography: record.geography,
+        segment: record.segment,
+        segmentType: record.segment_type,
+        currentValue: record.time_series[year] || 0,
+        startValue: record.time_series[startYear] || 0,
+        endValue: record.time_series[endYear] || 0,
+        growth:
+          record.time_series[startYear] > 0
+            ? (((record.time_series[endYear] || 0) - (record.time_series[startYear] || 0)) /
+                record.time_series[startYear]) *
+              100
+            : 0,
+        cagr: parseCAGR(record.cagr),
+        marketShare: shareByKey[sk] ?? 0,
+        sparkline: Object.entries(record.time_series)
+          .filter(([y]) => parseInt(y) >= startYear && parseInt(y) <= endYear)
+          .sort(([a], [b]) => parseInt(a) - parseInt(b))
+          .map(([, value]) => value),
+      }
+    })
   }, [data, filters])
 
   const sortedData = useMemo(() => {
@@ -161,7 +174,7 @@ export function ComparisonTable({ title, height = 600 }: ComparisonTableProps) {
             {title || 'Data Comparison Table'}
           </h3>
           <p className="text-sm text-black mt-1">
-            Year: {year} | Values in {valueUnit}
+            Year: {year} | Values in {valueUnit}. Share % uses the mean over {filters.yearRange[0]}–{filters.yearRange[1]} within each geography vs peer segments in the same scope—not pooled across geographies.
           </p>
         </div>
         <button

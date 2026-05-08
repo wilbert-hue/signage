@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useDashboardStore } from '@/lib/store'
+import { getSelectableSegmentTypes, VOLUME_ONLY_SEGMENT_TYPE, constrainVolumeByComponentHierarchy } from '@/lib/chart-config'
 import { GeographyMultiSelect } from './GeographyMultiSelect'
 import { BusinessTypeFilter } from './BusinessTypeFilter'
 import { YearRangeSlider } from './YearRangeSlider'
@@ -24,30 +25,43 @@ export function EnhancedFilterPanel() {
   const [currentSegmentSelection, setCurrentSegmentSelection] = useState<string>('')
   const [cascadePath, setCascadePath] = useState<string[]>([])
 
-  // Initialize selectedSegments from store filters when data loads
+  // Keep local selection in sync with the store (including clears — e.g. Value → Volume resets segments)
   useEffect(() => {
-    if (data && filters.segments && filters.segments.length > 0 && filters.segmentType) {
-      // Convert store segments to SelectedSegmentItem format
-      // Deduplicate segments to prevent duplicate keys
-      const seen = new Set<string>()
-      const segmentsFromStore: SelectedSegmentItem[] = []
-      
-      filters.segments.forEach((segment) => {
-        const id = `${filters.segmentType}::${segment}`
-        // Only add if we haven't seen this segment+type combination
-        if (!seen.has(id)) {
-          seen.add(id)
-          segmentsFromStore.push({
-            type: filters.segmentType,
-            segment: segment,
-            id: id
-          })
-        }
-      })
-      
-      setSelectedSegments(segmentsFromStore)
+    if (!data || !filters.segmentType) return
+
+    const adv = filters.advancedSegments ?? []
+    const segs = filters.segments ?? []
+
+    if (segs.length === 0) {
+      setSelectedSegments([])
+      setCurrentSegmentSelection('')
+      setCascadePath([])
+      return
     }
-  }, [data, filters.segments, filters.segmentType])
+
+    if (adv.length > 0) {
+      const forType = adv.filter(a => a.type === filters.segmentType)
+      setSelectedSegments(forType.length > 0 ? forType : [])
+      return
+    }
+
+    const seen = new Set<string>()
+    const segmentsFromStore: SelectedSegmentItem[] = []
+
+    segs.forEach(segment => {
+      const id = `${filters.segmentType}::${segment}`
+      if (!seen.has(id)) {
+        seen.add(id)
+        segmentsFromStore.push({
+          type: filters.segmentType,
+          segment,
+          id,
+        })
+      }
+    })
+
+    setSelectedSegments(segmentsFromStore)
+  }, [data, filters.segmentType, filters.segments, filters.advancedSegments])
 
   // Update when filters change
   useEffect(() => {
@@ -59,14 +73,6 @@ export function EnhancedFilterPanel() {
     }
   }, [filters.segmentType, data])
 
-  // When switching data type (value/volume), keep the current segment type if it exists in both datasets
-  // This allows seamless switching between value and volume data for the same segment types
-  useEffect(() => {
-    // No need to reset segment type - allow all segment types for both value and volume
-    // The data processor handles both datasets with the same segment types
-  }, [filters.dataType])
-  
-  // Clear selected segments when business type changes and segment type has B2B/B2C
   const segmentDimension = data?.dimensions?.segments?.[selectedSegmentType]
   const hasB2BSegmentation = segmentDimension && (
     (segmentDimension.b2b_hierarchy && Object.keys(segmentDimension.b2b_hierarchy).length > 0) ||
@@ -151,6 +157,21 @@ export function EnhancedFilterPanel() {
       })
       availableSegments = Array.from(allSegmentsFromHierarchy)
     }
+  }
+
+  if (
+    filters.dataType === 'volume' &&
+    selectedSegmentType === VOLUME_ONLY_SEGMENT_TYPE &&
+    segmentDimension &&
+    !hasB2BSegmentation &&
+    Object.keys(hierarchy).length > 0
+  ) {
+    const itemsForNarrow = segmentDimension.items?.length
+      ? segmentDimension.items
+      : availableSegments
+    const narrowed = constrainVolumeByComponentHierarchy(hierarchy, itemsForNarrow)
+    hierarchy = narrowed.hierarchy
+    availableSegments = narrowed.items
   }
   
   // Build hierarchical options for the select (only used for flat segments fallback)
@@ -247,17 +268,8 @@ export function EnhancedFilterPanel() {
 
   if (!data) return null
 
-  // Get all segment types
-  // For volume mode, only show segment types that have actual volume records
   const allSegmentTypes = Object.keys(data.dimensions.segments)
-  const segmentTypes = filters.dataType === 'volume'
-    ? (() => {
-        const volumeRecords = data.data.volume.geography_segment_matrix
-        const volumeSegTypes = new Set(volumeRecords.map(r => r.segment_type))
-        const filtered = allSegmentTypes.filter(type => volumeSegTypes.has(type))
-        return filtered.length > 0 ? filtered : allSegmentTypes
-      })()
-    : allSegmentTypes
+  const segmentTypes = getSelectableSegmentTypes(filters.dataType, allSegmentTypes)
 
   return (
     <div className="bg-white rounded-lg shadow-sm p-2.5 space-y-2">

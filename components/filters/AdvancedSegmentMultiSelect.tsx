@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { useDashboardStore } from '@/lib/store'
+import { getSelectableSegmentTypes } from '@/lib/chart-config'
 import { Check, ChevronDown, X } from 'lucide-react'
 
 interface SelectedSegment {
@@ -85,7 +86,7 @@ export function AdvancedSegmentMultiSelect() {
   if (!data) return null
 
   const totalSelected = selectedSegments.length
-  const segmentTypes = Object.keys(allSegmentOptions)
+  const segmentTypes = getSelectableSegmentTypes(filters.dataType, Object.keys(allSegmentOptions))
 
   return (
     <div className="space-y-4" ref={dropdownRef}>
